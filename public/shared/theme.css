@@ -1,0 +1,43 @@
+/* theme.css — design tokens ONLY. No layout, no components here. */
+:root{
+  --bg:#05070a;
+  --bg-elevated:#0d1117;
+  --glass:rgba(255,255,255,0.06);
+  --glass-border:rgba(255,255,255,0.10);
+  --text:#f5f7fa;
+  --text-dim:#8b93a1;
+  --accent:#3b82f6;
+  --accent-glow:rgba(59,130,246,0.45);
+  --danger:#ef4444;
+  --danger-glow:rgba(239,68,68,0.5);
+  --success:#22c55e;
+  --warn:#f59e0b;
+  --radius-sm:10px;
+  --radius-md:16px;
+  --radius-lg:24px;
+  --radius-full:999px;
+  --space-1:4px;
+  --space-2:8px;
+  --space-3:12px;
+  --space-4:16px;
+  --space-5:24px;
+  --space-6:32px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --shadow-lg: 0 20px 60px rgba(0,0,0,0.5);
+  --blur: blur(20px) saturate(180%);
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font);
+  -webkit-font-smoothing:antialiased;
+  overscroll-behavior:none;
+}
+.glass{
+  background:var(--glass);
+  backdrop-filter:var(--blur);
+  -webkit-backdrop-filter:var(--blur);
+  border:1px solid var(--glass-border);
+  border-radius:var(--radius-lg);
+}

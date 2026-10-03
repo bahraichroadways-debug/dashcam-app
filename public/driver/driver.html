@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Driver Cockpit — Bahraich Roadways</title>
+
+<!-- 🛡️ 1. दर्शक मोड सबसे पहले लॉक करें -->
+<script>
+  (function() {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('role') === 'viewer') {
+      window.isViewerMode = true;
+    }
+  })();
+</script>
+
+<link rel="stylesheet" href="../shared/theme.css">
+<link rel="stylesheet" href="../shared/animations.css">
+<link rel="stylesheet" href="driver.css">
+<link rel="manifest" href="../manifest.json">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<!-- ⚡ Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="../shared/pwa-install.js" defer></script>
+</head>
+<body>
+
+<div class="mobile-frame">
+
+  <!-- 1. अल्ट्रा-स्लीक प्रो हेडर -->
+  <header class="top-bar">
+    <button id="navBtn" class="nav-icon-btn press-scale" onclick="document.getElementById('navSheet').classList.add('open')" aria-label="Menu">☰</button>
+    
+    <div class="header-center">
+      <div id="vehicleDisplay" class="vehicle-title">--</div>
+      <div id="gpsLiveStatus" class="gps-status text-slate-400">⏳ सिग्नल लोड हो रहा है...</div>
+    </div>
+
+    <button id="settingsIconBtn" class="settings-icon-btn press-scale" onclick="openDriverSettingsPanel()" title="सेटिंग्स व गाड़ी नियंत्रण">⚙️</button>
+  </header>
+
+  <!-- 2. मिनिमल कैप्सूल टैब स्विचर (डिफ़ॉल्ट रूप से MAP सक्रिय) -->
+  <div id="driverTabBar" class="tab-capsule-wrap">
+    <div class="tab-capsule">
+      <button id="tabMapBtn" class="capsule-btn active" onclick="switchDriverTab('map')">🚛 Map</button>
+      <button id="tabDashcamBtn" class="capsule-btn" onclick="switchDriverTab('dashcam')">🎥 Dashcam</button>
+    </div>
+  </div>
+
+  <!-- 3. डैशकैम पैनल (डिफ़ॉल्ट हिडन) -->
+  <div id="dashcamPanel" class="tab-panel hidden">
+    <video id="localVideo" autoplay muted playsinline></video>
+    <div class="video-overlay-gradient"></div>
+
+    <div id="camOverlayControls" class="cam-floating-hud">
+      <button id="switchCamBtn" class="cam-hud-btn press-scale" title="कैमरा पलटें">🔄</button>
+      <button id="torchBtn" class="cam-hud-btn press-scale" title="टॉर्च">⚡</button>
+      <button id="nightBtn" class="cam-hud-btn press-scale" title="नाइट विजन">🌙</button>
+      <button id="powerBtn" class="cam-hud-btn press-scale" onclick="document.getElementById('shutdownOverlay').classList.add('active'); setTimeout(()=>document.getElementById('shutdownOverlay').classList.remove('active'), 3000);" title="फेक ऑफ">⏻</button>
+    </div>
+  </div>
+
+  <!-- 4. मैप पैनल (डिफ़ॉल्ट सक्रिय) -->
+  <div id="mapPanel" class="tab-panel">
+    <!-- ट्रिप सेक्शन -->
+    <div id="tripSection" class="trip-compact-wrap">
+      <div id="branchList" class="branch-chips-list">
+        <div class="zero-trip-pill">
+          <span class="w-2 h-2 rounded-full animate-pulse" style="background:#10b981;"></span>
+          <span>🟢 कोई एक्टिव चालान नहीं · गाड़ी खाली है</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ड्रैग पट्टी -->
+    <div id="dragHandle" class="drag-handle-bar">
+      <div class="drag-pill"></div>
+    </div>
+
+    <!-- मैप एरिया -->
+    <div id="mapSection" class="map-viewport">
+      <!-- 📏 फ्लोटिंग KM व ETA HUD -->
+      <div id="liveKmBadge" class="hidden km-floating-hud">
+        <span class="text-sm">🛣️</span>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <span id="liveKmText" class="hud-km">-- KM</span>
+          <span id="liveEtaText" class="hud-eta">⏱️ --</span>
+          <span class="hud-label">बची दूरी</span>
+        </div>
+      </div>
+
+      <!-- 🗺️ 4-लेयर स्लाइडिंग डॉक (केवल मैप थीम्स अंदर) -->
+      <div id="mapDockWrap" class="map-dock-wrap">
+        <div class="map-dock-bar">
+          <div class="map-dock-items">
+            <button class="dock-icon-btn active" data-layer="street" onclick="switchMapLayer('street')" title="स्ट्रीट मैप">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+            </button>
+            <button class="dock-icon-btn" data-layer="satellite" onclick="switchMapLayer('satellite')" title="सैटेलाइट दृश्य">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M12 9V3M12 15v6M9 12H3M15 12h6"/><rect x="2" y="4" width="4" height="4" rx="0.5"/><rect x="18" y="4" width="4" height="4" rx="0.5"/><rect x="2" y="16" width="4" height="4" rx="0.5"/><rect x="18" y="16" width="4" height="4" rx="0.5"/></svg>
+            </button>
+            <button class="dock-icon-btn" data-layer="dark" onclick="switchMapLayer('dark')" title="डार्क मोड">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </button>
+            <button class="dock-icon-btn" data-layer="topo" onclick="switchMapLayer('topo')" title="टोपो लैंडस्केप">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>
+            </button>
+          </div>
+          <button class="map-dock-trigger press-scale" onclick="document.getElementById('mapDockWrap').classList.toggle('open')" title="नक्शा लेयर्स">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 🎯 दोनों फ्लोटिंग एक्शन बटन (Google Maps लेआउट - डॉक के बाहर) -->
+      <div class="map-floating-actions-col">
+        <!-- 🔗 WhatsApp लोकेशन शेयर बटन -->
+        <button id="shareLocationBtn" class="map-floating-action-btn press-scale" onclick="shareLiveLocationWhatsApp()" title="WhatsApp पर लोकेशन भेजें">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        </button>
+        <!-- 🎯 GPS री-सेंटर बटन -->
+        <button id="recenterBtn" class="map-floating-action-btn press-scale" onclick="recenterDriverGPS()" title="गाड़ी पर फोकस करें">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><circle cx="12" cy="12" r="2.5" fill="#38bdf8"/></svg>
+        </button>
+      </div>
+
+      <div id="transportMap"></div>
+    </div>
+  </div>
+
+  <!-- 5. 🎛️ फ्लोटिंग ट्विन पिल्स (PTT व SOS) -->
+  <div id="persistentActionControls" class="floating-twin-controls">
+    <button id="pttBtn" class="pill-btn ptt-pill press-scale" 
+      onpointerdown="if(window.PTTEngine) window.PTTEngine.startTalking(); this.classList.add('active');" 
+      onpointerup="if(window.PTTEngine) window.PTTEngine.stopTalking(); this.classList.remove('active');" 
+      onpointercancel="if(window.PTTEngine) window.PTTEngine.stopTalking(); this.classList.remove('active');" 
+      title="होल्ड टू टॉक">
+      <span class="text-base">🎙️</span> <span>PTT</span>
+    </button>
+    <button id="sosBtn" class="pill-btn sos-pill press-scale" onclick="triggerNativeSOSAlert()" title="आपातकालीन SOS">
+      <span class="text-sm">🆘</span> <span>SOS</span>
+    </button>
+  </div>
+</div>
+
+<!-- 6. साइड ड्रॉवर मेन्यू -->
+<div id="navSheet" class="nav-sheet" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="nav-sheet-inner">
+    <div class="drawer-header">
+      <div class="drawer-avatar">🚚</div>
+      <div>
+        <div id="drawerTruckLabel" class="drawer-truck">--</div>
+        <div class="drawer-status">● ऑनलाइन ड्राइवर</div>
+      </div>
+    </div>
+
+    <div class="drawer-menu-list">
+      <button class="drawer-item" onclick="switchDriverTab('map'); document.getElementById('navSheet').classList.remove('open');">
+        <span>🚛</span> <span>Transport Map</span>
+      </button>
+      <button class="drawer-item" onclick="switchDriverTab('dashcam'); document.getElementById('navSheet').classList.remove('open');">
+        <span>🎥</span> <span>Dashcam Camera</span>
+      </button>
+      <button class="drawer-item" onclick="document.getElementById('navSheet').classList.remove('open'); openDriverSettingsPanel();">
+        <span>⚙️</span> <span>सेटिंग्स व गाड़ी नियंत्रण</span>
+      </button>
+    </div>
+
+    <div style="flex:1;"></div>
+    <button class="drawer-logout-btn" onclick="safeDriverLogout()">
+      <span>🚪</span> <span>Logout (गाड़ी हटाएं)</span>
+    </button>
+  </div>
+</div>
+
+<!-- 7. ⚙️ प्रो Apple/Tesla 6-कैटेगरी सेटिंग्स शीट -->
+<div id="settingsSheet" class="settings-sheet">
+  <div class="settings-sheet-inner">
+    
+    <div class="set-header">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:16px;">⚙️</span>
+        <span style="font-weight:900; font-size:14px; color:#fff;">ड्राइवर कॉकपिट सेटिंग्स</span>
+        <span class="live-pill">LIVE</span>
+      </div>
+      <button class="set-close-btn" onclick="document.getElementById('settingsSheet').classList.remove('open')">✕</button>
+    </div>
+
+    <!-- 1. 🚛 वाहन व प्रोफ़ाइल -->
+    <div class="set-group">
+      <div class="set-group-title"><span>🚛</span> <span>वाहन व ड्राइवर प्रोफ़ाइल</span></div>
+      <div class="set-card">
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <label style="font-size:11px; font-weight:700; color:#94a3b8; text-transform:uppercase;">सक्रिय गाड़ी नंबर (Vehicle Number)</label>
+          <div style="display:flex; gap:8px;">
+            <input id="setVehicleInput" class="set-input" type="text" placeholder="उदा: UP78BN5415" style="flex:1; text-transform:uppercase; font-weight:bold; letter-spacing:1px;" />
+            <button class="set-save-btn" onclick="saveNewVehicleFromSettings()">सुरक्षित करें</button>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.06);">
+          <label style="font-size:11px; font-weight:700; color:#94a3b8; text-transform:uppercase;">ड्राइवर का नाम / उपनाम (Driver Alias)</label>
+          <input id="setDriverNameInput" class="set-input" type="text" placeholder="उदा: राम सिंह (9876543210)" onchange="saveSettingItem('driver_alias', this.value)" />
+        </div>
+        <div class="set-row" style="padding-top:4px;">
+          <div>
+            <div class="set-row-title">सक्रिय शाखा (Assigned Station)</div>
+            <div class="set-row-sub" id="setStationLabel">बहराइच H.O. (डिटेक्टेड)</div>
+          </div>
+          <span style="font-size:11px; font-weight:800; color:#3b82f6; background:rgba(59,130,246,0.15); padding:3px 8px; border-radius:6px;">सक्रिय</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. 🎥 डैशकैम व वीडियो ट्यूनिंग -->
+    <div class="set-group">
+      <div class="set-group-title"><span>🎥</span> <span>डैशकैम व वीडियो ट्यूनिंग</span></div>
+      <div class="set-card">
+        <div class="set-row">
+          <div>
+            <div class="set-row-title">डिफ़ॉल्ट कैमरा मोड</div>
+            <div class="set-row-sub">कैमरा खुलने पर दिशा</div>
+          </div>
+          <select id="setCamFacing" class="set-select" onchange="saveSettingItem('driver_cam_facing', this.value)">
+            <option value="environment" selected>आगे की सड़क (Back)</option>
+            <option value="user">केबिन / ड्राइवर (Front)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. 🛰️ GPS, नेविगेशन व मैप प्राथमिकता -->
+    <div class="set-group">
+      <div class="set-group-title"><span>🛰️</span> <span>GPS, नेविगेशन व मैप</span></div>
+      <div class="set-card">
+        <div class="set-row">
+          <div>
+            <div class="set-row-title">GPS रिफ्रेश फ्रीक्वेंसी</div>
+            <div class="set-row-sub">सिग्नल भेजने की गति</div>
+          </div>
+          <select id="setGpsRate" class="set-select" onchange="saveSettingItem('driver_gps_rate', this.value)">
+            <option value="15" selected>⚡ सुपर फास्ट (15s)</option>
+            <option value="45">🔋 बैटरी सेवर (45s)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. 🔋 पावर, डिस्प्ले व वेकलॉक -->
+    <div class="set-group">
+      <div class="set-group-title"><span>🔋</span> <span>पावर व स्क्रीन वेकलॉक</span></div>
+      <div class="set-card">
+        <div class="set-row">
+          <div>
+            <div class="set-row-title">स्क्रीन हमेशा ऑन रखें (WakeLock)</div>
+            <div class="set-row-sub">ड्राइविंग के समय स्क्रीन स्लीप रोके</div>
+          </div>
+          <label class="ios-switch">
+            <input id="setWakeLock" type="checkbox" checked onchange="toggleWakeLockPreference(this.checked)">
+            <span class="ios-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. 🛠️ लाइव सिस्टम डायग्नोस्टिक्स व कैश -->
+    <div class="set-group">
+      <div class="set-group-title"><span>🛠️</span> <span>सिस्टम डायग्नोस्टिक्स</span></div>
+      <div class="set-card">
+        <div class="set-row">
+          <div>
+            <div class="set-row-title">लोकल कैश व रूट रीसेट</div>
+            <div class="set-row-sub">अस्थायी मैप डेटा साफ़ करें</div>
+          </div>
+          <button onclick="clearDriverCache()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; font-size:11px; font-weight:700; padding:6px 12px; border-radius:8px; cursor:pointer;">
+            🧹 कैश साफ़ करें
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. 🚪 डेंजर ज़ोन -->
+    <div class="set-group" style="padding-top:4px;">
+      <button id="setLogoutBtn" class="set-logout-btn" onclick="safeDriverLogout()">
+        🚪 लॉगआउट करें (गाड़ी डेटाबेस से हटाएं)
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<div id="shutdownOverlay" class="shutdown-overlay">
+  <div class="shutdown-text">Powering off…</div>
+</div>
+
+<script>
+  async function switchDriverTab(tab) {
+    if (window.isViewerMode) return;
+    const dPanel = document.getElementById('dashcamPanel');
+    const mPanel = document.getElementById('mapPanel');
+    const tDash = document.getElementById('tabDashcamBtn');
+    const tMap = document.getElementById('tabMapBtn');
+
+    if (tab === 'dashcam') {
+      mPanel.classList.add('hidden');
+      dPanel.classList.remove('hidden');
+      tMap.classList.remove('active');
+      tDash.classList.add('active');
+
+      if (window.driverCam && typeof window.driverCam.startCamera === 'function') {
+        await window.driverCam.startCamera();
+      }
+    } else {
+      dPanel.classList.add('hidden');
+      mPanel.classList.remove('hidden');
+      tDash.classList.remove('active');
+      tMap.classList.add('active');
+
+      if (window.driverCam && typeof window.driverCam.stopCamera === 'function') {
+        window.driverCam.stopCamera();
+      }
+
+      if (window.mapInstance) setTimeout(() => window.mapInstance.invalidateSize(), 80);
+    }
+  }
+
+  function openDriverSettingsPanel() {
+    if (window.isViewerMode) return;
+    const sheet = document.getElementById('settingsSheet');
+    const input = document.getElementById('setVehicleInput');
+    const nameInput = document.getElementById('setDriverNameInput');
+    const stLabel = document.getElementById('setStationLabel');
+
+    if (input) input.value = localStorage.getItem('driver_vehicle_num') || '';
+    if (nameInput) nameInput.value = localStorage.getItem('driver_alias') || '';
+    if (stLabel) {
+      const st = localStorage.getItem('driver_main_station');
+      stLabel.innerText = st ? `${st} (सक्रिय)` : 'ऑटो-डिटेक्टेड';
+    }
+
+    if (sheet) sheet.classList.add('open');
+  }
+
+  function saveSettingItem(key, val) {
+    localStorage.setItem(key, String(val));
+  }
+
+  function saveNewVehicleFromSettings() {
+    const input = document.getElementById('setVehicleInput');
+    if (!input) return;
+    const clean = input.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const current = localStorage.getItem('driver_vehicle_num') || '';
+    if (clean && clean !== current) {
+      localStorage.setItem('driver_vehicle_num', clean);
+      localStorage.setItem('driver_id', clean);
+      window.location.reload();
+    } else {
+      document.getElementById('settingsSheet').classList.remove('open');
+    }
+  }
+
+  function clearDriverCache() {
+    try {
+      const keys = Object.keys(localStorage);
+      keys.forEach(k => {
+        if (k.startsWith('addr_') || k.startsWith('route_')) {
+          localStorage.removeItem(k);
+        }
+      });
+      alert("✅ अस्थायी रूट व पता कैश साफ़ हो गया है!");
+    } catch(e) {}
+  }
+
+  let wakeLockSentinel = null;
+  async function toggleWakeLockPreference(enabled) {
+    saveSettingItem('driver_wakelock', enabled);
+    if (enabled) {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLockSentinel = await navigator.wakeLock.request('screen');
+        }
+      } catch(e) {}
+    } else {
+      if (wakeLockSentinel) {
+        wakeLockSentinel.release().catch(()=>{});
+        wakeLockSentinel = null;
+      }
+    }
+  }
+
+  async function safeDriverLogout() {
+    const truck = localStorage.getItem('driver_vehicle_num');
+    if (truck && typeof firebase !== 'undefined' && firebase.firestore) {
+      try {
+        await firebase.firestore().collection('truck_locations').doc(truck).delete();
+        await firebase.firestore().collection('calls').doc(`truck_${truck}`).delete();
+      } catch(e) {}
+    }
+    if (window.driverCam && typeof window.driverCam.stopCamera === 'function') {
+      window.driverCam.stopCamera();
+    }
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.replace('../index.html');
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const vNum = localStorage.getItem('driver_vehicle_num') || '--';
+    const drLabel = document.getElementById('drawerTruckLabel');
+    if (drLabel) drLabel.innerText = vNum;
+    const vDisp = document.getElementById('vehicleDisplay');
+    if (vDisp) vDisp.innerText = vNum;
+    toggleWakeLockPreference(true);
+  });
+
+  window.triggerNativeSOSAlert = async function() {
+    const truck = localStorage.getItem('driver_vehicle_num');
+    if (!truck) return;
+    if (confirm("⚠️ क्या आप आपातकालीन SOS अलर्ट भेजना चाहते हैं?")) {
+      if (typeof firebase !== 'undefined' && firebase.firestore) {
+        try {
+          await firebase.firestore().collection('truck_locations').doc(truck).update({
+            sos: true,
+            sos_timestamp: Date.now()
+          });
+          alert("🚨 SOS अलर्ट एडमिन को भेज दिया गया है!");
+        } catch(e) {}
+      }
+    }
+  };
+</script>
+
+<!-- FIREBASE SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<script src="../shared/firebase-config.js"></script>
+<script src="../shared/gas-config.js"></script>
+<script src="../shared/toast.js"></script>
+<script src="../shared/auth.js"></script>
+<script src="../shared/error-logger.js"></script>
+<script src="../shared/notify-trace.js"></script>
+
+<script src="js/session.js?v=5.0"></script>
+<script src="js/gps.js?v=5.0"></script>
+<script src="js/bg-keeper.js?v=5.0"></script>
+<script src="js/gps-signaling.js?v=5.0"></script>
+<script src="js/my-stations.js?v=5.0"></script>
+<script src="../shared/ptt.js"></script>
+<script src="js/driver-cam.js?v=6.0"></script>
+
+<script>
+  window.addEventListener('DOMContentLoaded', async () => {
+    if (window.isViewerMode) return;
+    const truck = (localStorage.getItem('driver_vehicle_num') || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!truck) return;
+
+    try {
+      const cam = await window.DriverCam.initDriverCam(document.getElementById('localVideo'), truck);
+      window.driverCam = cam;
+
+      if (window.PTTEngine) {
+        window.PTTEngine.initPTT({ isInitiator: false, roomId: `truck_${truck}` });
+      }
+
+      if (window.FleetGPS && typeof window.FleetGPS.startTracking === 'function') {
+        window.FleetGPS.startTracking();
+      }
+
+      const switchCamBtn = document.getElementById('switchCamBtn');
+      const torchBtn = document.getElementById('torchBtn');
+      const nightBtn = document.getElementById('nightBtn');
+
+      if (switchCamBtn) switchCamBtn.onclick = () => cam.switchCamera();
+      if (torchBtn) torchBtn.onclick = async () => torchBtn.classList.toggle('active', await cam.toggleTorch());
+      if (nightBtn) nightBtn.onclick = () => nightBtn.classList.toggle('active', cam.toggleNightMode());
+    } catch(err) {
+      console.warn("Media bootstrap info:", err);
+    }
+  });
+</script>
+</body>
+</html>

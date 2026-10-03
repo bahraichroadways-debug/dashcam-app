@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DashboardCam</title>
+
+<!-- ⚡ 0ms ऑटो-रीडायरेक्ट (लॉगिन रहने पर स्क्रीन कभी दोबारा नहीं खुलेगी) -->
+<script>
+  (function() {
+    const role = localStorage.getItem('user_role');
+    const auth = localStorage.getItem('fleet_auth');
+    if (role && auth) {
+      if (role === 'admin') {
+        window.location.replace('admin/admin.html');
+      } else if (localStorage.getItem('driver_vehicle_num')) {
+        window.location.replace('driver/driver.html');
+      }
+    }
+  })();
+</script>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#05070a">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  body { background: #05070a !important; color: #f5f7fa; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .screen { width: 100%; max-width: 400px; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+  .logo { font-size: 24px; font-weight: 800; letter-spacing: 1px; }
+  .logo span { color: #3b82f6; }
+  .role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; }
+  .role-card { background: #0d1117; border: 1px solid rgba(255,255,255,0.12); padding: 20px 14px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; transition: transform 0.15s, border-color 0.15s; }
+  .role-card:active { transform: scale(0.96); }
+  .role-card:hover { border-color: #3b82f6; }
+  .role-card .icon { font-size: 32px; }
+  .role-card .label { font-weight: 700; font-size: 15px; }
+  .role-card .sub { font-size: 11px; color: #8b93a1; }
+  .login-form { width: 100%; display: none; flex-direction: column; gap: 12px; background: #0d1117; border: 1px solid rgba(255,255,255,0.12); padding: 20px; border-radius: 18px; }
+  .login-form.active { display: flex; }
+  .login-form input { background: #05070a; border: 1.5px solid rgba(255,255,255,0.18); border-radius: 10px; padding: 12px; color: #ffffff; font-size: 15px; outline: none; }
+  .login-form input:focus { border-color: #3b82f6; }
+  .submit-btn { background: #3b82f6 !important; border: none; border-radius: 10px; padding: 13px; color: #ffffff !important; font-weight: 700; font-size: 15px; cursor: pointer; width: 100%; }
+  .submit-btn:active { transform: scale(0.97); }
+  .back-link { font-size: 12px; color: #8b93a1; cursor: pointer; text-align: center; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="screen">
+  <div class="logo">DASHBOARD<span>CAM</span></div>
+
+  <div id="roleGrid" class="role-grid">
+    <div class="role-card" data-role="admin">
+      <div class="icon">🛰️</div>
+      <div class="label">Admin</div>
+      <div class="sub">Fleet Dashboard</div>
+    </div>
+    <div class="role-card" data-role="driver">
+      <div class="icon">🚚</div>
+      <div class="label">User</div>
+      <div class="sub">Truck / Vehicle</div>
+    </div>
+  </div>
+
+  <form id="loginForm" class="login-form">
+    <input id="idInput" type="text" placeholder="Enter ID" autocomplete="off">
+    <button type="submit" class="submit-btn">Continue →</button>
+    <div id="backLink" class="back-link">← Back</div>
+  </form>
+</div>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  }
+
+  let selectedRole = null;
+  const roleGrid = document.getElementById('roleGrid');
+  const loginForm = document.getElementById('loginForm');
+  const idInput = document.getElementById('idInput');
+  const backLink = document.getElementById('backLink');
+
+  document.querySelectorAll('.role-card').forEach(card => {
+    card.addEventListener('click', () => {
+      selectedRole = card.dataset.role;
+      idInput.placeholder = selectedRole === 'admin' ? 'Admin ID (उदा: ADMIN1)' : 'गाड़ी नंबर (उदा: UP78BN5415)';
+      roleGrid.style.display = 'none';
+      loginForm.classList.add('active');
+      idInput.focus();
+    });
+  });
+
+  backLink.addEventListener('click', () => {
+    loginForm.classList.remove('active');
+    roleGrid.style.display = 'grid';
+    idInput.value = '';
+  });
+
+  loginForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const val = idInput.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!val) { alert('कृपया सही ID / गाड़ी नंबर भरें!'); return; }
+
+    const authPayload = { role: selectedRole || 'driver', id: val, vehicleNum: val };
+    localStorage.setItem('fleet_auth', JSON.stringify(authPayload));
+    localStorage.setItem('user_role', selectedRole || 'driver');
+
+    if (selectedRole === 'admin') {
+      localStorage.removeItem('driver_id');
+      localStorage.removeItem('driver_vehicle_num');
+      window.location.replace('admin/admin.html');
+    } else {
+      localStorage.setItem('driver_id', val);
+      localStorage.setItem('driver_vehicle_num', val);
+      window.location.replace('driver/driver.html');
+    }
+  });
+</script>
+</body>
+</html>

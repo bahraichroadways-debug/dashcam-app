@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — DASHCAMAPP</title>
+
+<!-- 🛡️ एडमिन शील्ड: एडमिन कभी भी ड्राइवर लिस्ट में रजिस्टर नहीं होगा -->
+<script>
+  localStorage.removeItem('driver_vehicle_num');
+  localStorage.removeItem('driver_id');
+</script>
+
+<link rel="stylesheet" href="../shared/theme.css">
+<link rel="stylesheet" href="../shared/animations.css">
+<link rel="stylesheet" href="admin.css?v=6.0">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<style>
+  .cockpit-icon-btn {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #fff; font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .15s ease, background .15s ease;
+  }
+  .cockpit-icon-btn:hover { background: rgba(255, 255, 255, 0.18); }
+  .cockpit-icon-btn:active { transform: scale(0.92); }
+  .cockpit-icon-btn.active { background: #3b82f6; border-color: #60a5fa; }
+  
+/* 🎙️ फ्लोटिंग गोल PTT माइक बटन (नो-टेक्स्ट सिलेक्शन) */
+.floating-admin-ptt-wrap {
+  position: fixed;
+  bottom: 22px;
+  right: 24px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+
+.floating-admin-ptt {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 3px solid rgba(255,255,255,0.25);
+  color: #fff;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 8px 25px rgba(37,99,235,0.6);
+  position: relative;
+  transition: transform .12s cubic-bezier(0.4, 0, 0.2, 1), background .15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.floating-admin-ptt:active, .floating-admin-ptt.active {
+  background: #dc2626 !important;
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 35px rgba(220,38,38,0.9) !important;
+  transform: scale(0.92);
+}
+
+.floating-ptt-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: #94a3b8;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background: rgba(13,17,23,0.85);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.08);
+  pointer-events: none;
+}
+    display: flex; align-items: center; justify-content: space-between;
+    background: #0d1117; border: 1px solid var(--glass-border);
+    padding: 10px 16px; border-radius: 12px; margin-bottom: 14px;
+  }
+  .broadcast-btn {
+    background: #2563eb; border: none; color: #fff; font-weight: 800; font-size: 13px;
+    padding: 10px 20px; border-radius: 999px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+    box-shadow: 0 4px 14px rgba(37,99,235,0.4);
+  }
+  .broadcast-btn.active { background: #dc2626 !important; box-shadow: 0 0 20px #dc2626 !important; }
+
+  /* 🎯 वॉच बटन हमेशा एक्टिव (क्लिकेबल) ताकि कभी भी PTT किया जा सके */
+  .watch-btn, .watch-btn:disabled, .watch-btn[disabled] {
+    opacity: 1 !important; pointer-events: auto !important; cursor: pointer !important;
+  }
+</style>
+</head>
+<body>
+
+<header class="mobile-top-bar">
+  <button class="hamburger-btn" onclick="toggleMobileMenu()" aria-label="Menu">☰</button>
+  <div class="brand-wrap">
+    <div class="logo">DASHCAM<span>APP</span></div>
+    <div class="header-sub">Live Fleet Monitoring</div>
+  </div>
+</header>
+
+<div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleMobileMenu()"></div>
+
+<div class="admin-shell">
+  <nav id="sidebar" class="sidebar fade-in" style="display:flex; flex-direction:column; justify-content:space-between;">
+    <div>
+      <div class="sidebar-brand">
+        <div class="logo">DASHCAM<span>APP</span></div>
+        <div class="header-sub">Live Fleet Monitoring</div>
+      </div>
+      <div id="sidebarMenu" class="sidebar-menu-wrap"></div>
+    </div>
+
+    <div style="padding-top:16px; border-top:1px solid var(--glass-border); margin-top:20px;">
+      <button onclick="localStorage.clear(); sessionStorage.clear(); window.location.replace('../index.html');" class="menu-item" style="color:#ef4444; width:100%; font-weight:700;">
+        <span class="menu-icon">🚪</span> <span>Logout</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="admin-main">
+    <div id="statsRow" class="stats-row enter-up"></div>
+
+<!-- 🎙️ स्लीक फ्लोटिंग राउंड PTT बटन (स्क्रीन के नीचे गोल माइक) -->
+    <div class="floating-admin-ptt-wrap">
+      <button id="allFleetPttBtn" class="floating-admin-ptt"
+        onpointerdown="event.preventDefault(); startAllFleetBroadcast(); this.classList.add('active');"
+        onpointerup="event.preventDefault(); stopAllFleetBroadcast(); this.classList.remove('active');"
+        onpointercancel="event.preventDefault(); stopAllFleetBroadcast(); this.classList.remove('active');"
+        title="होल्ड करके सभी गाड़ियों को एक साथ बोलें">
+        <span>🎙️</span>
+      </button>
+      <div class="floating-ptt-label">All Fleet PTT</div>
+    </div>
+    <div id="tabContent">
+      <main class="truck-list-wrap enter-up">
+        <h2>Live Trucks Overview</h2>
+        <div id="truckList" class="truck-list"></div>
+      </main>
+    </div>
+  </div>
+</div>
+
+<!-- 🚁 प्रो-लेवल लाइव वीडियो कॉकपिट (सभी ओरिजिनल कंट्रोल्स 100% सुरक्षित) -->
+<div id="livePanel" class="live-panel">
+  <div class="live-panel-inner glass enter-up" style="max-width: 680px; width: 94vw;">
+    
+    <div class="live-panel-header" style="display:flex; justify-content:space-between; align-items:center; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.1); flex-wrap:nowrap; gap:6px;">
+      <div style="display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden;">
+        <span class="dot live" style="background:#ef4444; width:8px; height:8px; border-radius:50%; box-shadow:0 0 8px #ef4444; flex-shrink:0;"></span>
+        <span id="liveTitle" style="font-weight:900; font-size:13px; color:#fff; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">Truck</span>
+        <span id="liveSpeedBadge" style="font-size:9.5px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); padding:1px 5px; border-radius:4px; color:#cbd5e1; white-space:nowrap; flex-shrink:0;">⚡ 0 km/h</span>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:5px; flex-shrink:0;">
+        <button id="togglePipMapBtn" class="cockpit-icon-btn press-scale" title="लाइव मिनी मैप">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
+        </button>
+        <button id="snapshotBtn" class="cockpit-icon-btn press-scale" title="फ़ोटो लें">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+        </button>
+        <button id="toggleAudioBtn" class="cockpit-icon-btn press-scale" title="केबिन आवाज़">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+        </button>
+        <button id="fullscreenBtn" class="cockpit-icon-btn press-scale" title="फुलस्क्रीन">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+        </button>
+        <button id="closeLiveBtn" class="cockpit-icon-btn press-scale" style="background:rgba(239,68,68,0.2); border-color:rgba(239,68,68,0.4); color:#ef4444;" title="बंद करें">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- वीडियो फ्रेम + पिक्चर-इन-पिक्चर मिनी मैप -->
+    <div class="video-cockpit-wrap" style="position:relative; width:100%; border-radius:14px; overflow:hidden; background:#000; margin-top:8px;">
+      <video id="liveVideo" autoplay playsinline style="width:100%; aspect-ratio:16/9; object-fit:cover; display:block;"></video>
+      
+      <!-- 🎙️ प्रो ऑडियो पोस्टर (कैमरा न होने पर भी PTT बात चालू रखेगा) -->
+      <div id="audioModePlaceholder" class="hidden" style="position:absolute; inset:0; background:#0b111a; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;">
+        <div style="font-size:36px; animation:pulse 2s infinite;">🎙️</div>
+        <div style="font-size:13px; font-weight:800; color:#3b82f6;">LIVE PTT AUDIO CHANNEL</div>
+        <div style="font-size:11px; color:#64748b;">(कैमरा बंद होने पर भी सीधी बात चालू रहेगी)</div>
+      </div>
+
+      <!-- 🗺️ मिनी मैप -->
+      <div id="pipMapContainer" class="hidden" style="position:absolute; top:10px; right:10px; width:170px; height:110px; border-radius:12px; overflow:hidden; border:2px solid rgba(255,255,255,0.4); box-shadow:0 8px 24px rgba(0,0,0,0.8); z-index:20;">
+        <div id="pipMapLeaflet" style="width:100%; height:100%;"></div>
+      </div>
+    </div>
+
+    <!-- बॉटम कंट्रोल्स (सिंगल ड्राइवर PTT) -->
+    <div class="live-controls" style="display:flex; justify-content:center; align-items:center; padding-top:8px;">
+      <button id="adminPttBtn" class="ptt-btn-admin press-scale" 
+        onpointerdown="if(window.PTTEngine) window.PTTEngine.startTalking(); this.classList.add('active');" 
+        onpointerup="if(window.PTTEngine) window.PTTEngine.stopTalking(); this.classList.remove('active');" 
+        onpointercancel="if(window.PTTEngine) window.PTTEngine.stopTalking(); this.classList.remove('active');">
+        <span>🎙️</span> <span>HOLD TO TALK DRIVER</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleMobileMenu() {
+    const sb = document.getElementById('sidebar');
+    const ov = document.getElementById('sidebarOverlay');
+    if (sb) sb.classList.toggle('open');
+    if (ov) ov.classList.toggle('active');
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const sb = document.getElementById('sidebar');
+    if (sb) {
+      sb.addEventListener('click', (e) => {
+        if (e.target.closest('.menu-item') && window.innerWidth <= 720) {
+          toggleMobileMenu();
+        }
+      });
+    }
+  });
+
+  // 🎯 ALL FLEET ब्रॉडकास्ट फंक्शन्स
+  function startAllFleetBroadcast() {
+    if (window.PTTEngine) {
+      window.PTTEngine.switchRoom('fleet_broadcast', true);
+      window.PTTEngine.startTalking();
+    }
+  }
+
+  function stopAllFleetBroadcast() {
+    if (window.PTTEngine) {
+      window.PTTEngine.stopTalking();
+    }
+  }
+
+  // जब एडमिन किसी गाड़ी का लाइव पैनल खोले तो उस गाड़ी के प्राइवेट रूम में PTT स्विच करे
+  window.connectTruckPTT = function(truckId) {
+    if (window.PTTEngine && truckId) {
+      window.PTTEngine.switchRoom(`truck_${truckId}`, true);
+    }
+  };
+</script>
+
+<!-- FIREBASE SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+
+<!-- SHARED MODULES -->
+<script src="../shared/firebase-config.js"></script>
+<script src="../shared/toast.js"></script>
+<script src="../shared/auth.js"></script>
+
+<script>
+  if (window.FleetAuth && !window.Auth) { window.Auth = window.FleetAuth; }
+</script>
+
+<script src="../shared/error-logger.js"></script>
+<script src="../shared/structure-check.js"></script>
+<script src="../shared/notify-trace.js"></script>
+<script src="../shared/push-notify.js"></script>
+
+<!-- CORE ADMIN MODULES -->
+<script src="js/admin-session.js"></script>
+<script src="js/menu.js"></script>
+<script src="js/stats-panel.js"></script>
+<script src="js/truck-list.js"></script>
+<script src="js/live-view-ui.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="js/trucks-data.js"></script>
+<script src="js/live-map.js"></script>
+<script src="js/alerts-panel.js"></script>
+<script src="js/auto-resolve.js"></script>
+<script src="js/health-panel.js"></script>
+<script src="js/drivers-tab.js"></script>
+<script src="js/settings-tab.js"></script>
+<script src="js/recordings-panel.js"></script>
+
+<!-- Simple-Peer व PTT इंजन -->
+<script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+<script src="../shared/ptt.js"></script>
+<script src="admin-main.js?v=6.0"></script>
+
+<script>
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.PTTEngine) {
+      window.PTTEngine.initPTT({ isInitiator: true, roomId: 'fleet_broadcast' });
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,217 @@
+/* admin.css — admin screen layout/styling (120 FPS Pro Engine) */
+html, body {
+  overscroll-behavior-y: contain;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.logo{ font-size:20px; font-weight:800; letter-spacing: 0.5px; }
+.logo span{ color:var(--accent); }
+.header-sub{ font-size:11px; color:var(--text-dim); margin-top:1px; }
+
+/* 🖥️ PC पर साइडबार लोगो */
+.sidebar-brand {
+  padding: 4px 6px 14px 6px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.sidebar-menu-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.truck-list-wrap h2{ font-size:13px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; margin-bottom:var(--space-3); }
+.truck-list{ display:flex; flex-direction:column; gap:var(--space-2); }
+
+.truck-row{ 
+  display:flex; justify-content:space-between; align-items:center; padding:12px 16px; cursor:pointer;
+  will-change: transform; transform: translateZ(0); /* 🎯 120 FPS GPU */
+  transition: transform .12s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.truck-info{ display:flex; align-items:center; gap:12px; font-weight:500; }
+.truck-info .dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.truck-info .dot.online{ background:var(--success); box-shadow:0 0 8px var(--success); }
+.truck-info .dot.offline{ background:var(--text-dim); }
+
+.watch-btn{ 
+  background:var(--accent); border:none; color:#fff; padding:7px 16px; border-radius:var(--radius-full); font-size:12px; font-weight:700; cursor:pointer;
+  will-change: transform; transform: translateZ(0);
+  transition: transform .12s ease;
+}
+.watch-btn:disabled{ background:rgba(255,255,255,0.06); color:var(--text-dim); cursor:not-allowed; border:1px solid var(--glass-border); }
+
+.live-panel{ position:fixed; inset:0; background:rgba(0,0,0,.75); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .24s ease; z-index:50; }
+.live-panel.open{ opacity:1; pointer-events:auto; }
+.live-panel-inner{ 
+  width:min(94vw, 680px); padding:var(--space-4); display:flex; flex-direction:column; gap:var(--space-3);
+  will-change: transform, opacity; transform: translateZ(0); /* 🎯 120 FPS GPU */
+}
+.live-panel-header{ display:flex; justify-content:space-between; align-items:center; font-weight:600; }
+.close-btn{ background:var(--glass); border:1px solid var(--glass-border); color:var(--text); width:30px; height:30px; border-radius:50%; cursor:pointer; }
+#liveVideo{ width:100%; aspect-ratio:16/9; background:#000; border-radius:var(--radius-md); object-fit:cover; }
+.live-controls{ display:flex; justify-content:center; }
+.ptt-btn-admin{ 
+  background:var(--accent); border:none; color:#fff; font-weight:600; padding:12px 28px; border-radius:var(--radius-full); 
+  will-change: transform; transform: translateZ(0);
+  transition: transform .12s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ptt-btn-admin.active{ background:var(--danger); }
+
+/* Layout Shell — 100dvh नो-घोस्ट स्क्रॉल */
+html, body {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow-x: hidden;
+  overscroll-behavior: none;
+}
+.admin-shell {
+  min-height: 100dvh;
+  box-sizing: border-box;
+  padding: 16px 20px 80px 20px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 20px;
+  max-width: 1100px;
+  overflow-x: hidden;
+}
+.admin-main{ min-width:0; }
+
+.sidebar{ display:flex; flex-direction:column; }
+.menu-item{ 
+  display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:var(--radius-sm); background:transparent; border:none; color:var(--text-dim); font-size:14px; text-align:left; cursor:pointer; 
+  will-change: transform; transform: translateZ(0);
+  transition: background 0.15s, transform 0.12s; 
+}
+.menu-item.active{ background:var(--glass); color:var(--text); border:1px solid var(--glass-border); }
+.menu-icon{ font-size:16px; }
+
+.stats-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:var(--space-3); margin-bottom:var(--space-4); }
+.stat-card{ padding:var(--space-4); text-align:center; }
+.stat-num{ font-size:24px; font-weight:700; }
+.stat-label{ font-size:11px; color:var(--text-dim); margin-top:2px; text-transform:uppercase; letter-spacing:.4px; }
+
+.tab-placeholder{ padding:var(--space-6); text-align:center; color:var(--text-dim); font-size:14px; }
+#mapContainer{ width:100%; height:65vh; min-height:380px; border-radius:var(--radius-md); overflow:hidden; }
+
+.alert-row{ display:flex; align-items:center; gap:12px; padding:12px 14px; margin-bottom:8px; }
+.alert-icon{ font-size:18px; }
+.alert-label{ font-size:14px; font-weight:500; }
+.alert-time{ font-size:11px; color:var(--text-dim); margin-top:2px; }
+
+.health-row{ display:flex; align-items:flex-start; gap:12px; padding:12px 14px; margin-bottom:8px; }
+.health-icon{ font-size:18px; margin-top:1px; }
+.health-title{ font-size:13px; font-weight:600; }
+.health-detail{ font-size:12px; color:var(--text-dim); margin-top:2px; word-break:break-word; }
+.health-time{ font-size:11px; color:var(--text-dim); margin-top:4px; }
+
+.drivers-add{ display:flex; gap:8px; padding:14px; margin-bottom:12px; flex-wrap:wrap; }
+.drivers-add input{ flex:1; min-width:140px; background:var(--bg-elevated); border:1px solid var(--glass-border); border-radius:var(--radius-sm); padding:8px 10px; color:var(--text); font-size:13px; }
+.add-btn{ background:var(--accent); border:none; color:#fff; padding:8px 18px; border-radius:var(--radius-sm); font-weight:600; cursor:pointer; }
+.driver-row{ display:flex; justify-content:space-between; padding:12px 14px; margin-bottom:6px; }
+.driver-truck{ color:var(--text-dim); font-size:13px; }
+
+.settings-form{ display:flex; flex-direction:column; gap:14px; padding:var(--space-4); max-width:360px; }
+.settings-form label{ display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--text-dim); }
+.settings-form input{ background:var(--bg-elevated); border:1px solid var(--glass-border); border-radius:var(--radius-sm); padding:8px 10px; color:var(--text); font-size:14px; }
+
+.rec-select{ background:var(--bg-elevated); border:1px solid var(--glass-border); border-radius:var(--radius-sm); padding:8px 12px; color:var(--text); font-size:14px; margin-bottom:var(--space-3); }
+.rec-list{ display:flex; flex-direction:column; gap:12px; }
+.rec-row{ padding:var(--space-3); }
+.rec-row video{ width:100%; border-radius:var(--radius-sm); background:#000; }
+.rec-time{ font-size:12px; color:var(--text-dim); margin-top:6px; }
+
+/* 📱 मोबाइल टॉप-बार */
+.mobile-top-bar { display: none; }
+.hamburger-btn {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  color: #fff;
+  font-size: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  will-change: transform; transform: translateZ(0);
+}
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  z-index: 99;
+}
+.sidebar-overlay.active { display: block; }
+
+@media (max-width: 720px) {
+  .mobile-top-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #0d1117;
+    border-bottom: 1px solid var(--glass-border);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
+
+  .brand-wrap {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .admin-shell {
+    grid-template-columns: 1fr;
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: -280px;
+    width: 250px;
+    height: 100vh;
+    background: #0d1117;
+    border-right: 1px solid var(--glass-border);
+    padding: 18px 14px;
+    z-index: 100;
+    transition: left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 10px 0 30px rgba(0,0,0,0.8);
+  }
+  .sidebar.open { left: 0; }
+
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .stat-card { padding: 10px 8px; }
+  .stat-num { font-size: 20px; }
+  .truck-row { padding: 10px 12px; }
+}
+
+/* 🚁 सुपर कॉकपिट बटन (120 FPS GPU Accelerated) */
+.cockpit-icon-btn {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff; font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  will-change: transform; transform: translateZ(0); /* 🎯 120 FPS */
+  transition: transform .12s cubic-bezier(0.4, 0, 0.2, 1), background .12s ease;
+}
+.cockpit-icon-btn:hover { background: rgba(255, 255, 255, 0.18); }
+.cockpit-icon-btn:active { transform: scale(0.92); }
+.cockpit-icon-btn.active { background: #3b82f6; border-color: #60a5fa; }
+/* 🎯 लाइव वीडियो के ऊपर से ऑडियो पोस्टर को तुरंत छिपाने का नियम */
+.hidden { display: none !important; }
