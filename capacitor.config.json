@@ -1,5 +1,9 @@
 {
   "appId": "com.bahraich.dashcam",
   "appName": "Dashcam App",
-  "webDir": "public"
+  "webDir": "public",
+  "server": {
+    "url": "https://dashcamfordrive.web.app",
+    "cleartext": true
+  }
 }
