@@ -464,11 +464,61 @@
         }
       });
 
-      if (loadedStationsData.length > 0) {
+if (loadedStationsData.length > 0) {
         localStorage.setItem('driver_main_station', loadedStationsData[0].name);
         renderAllStationPins();
-      }
 
+        // 🔔 100% ऑटो-नोटिफिकेशन: जैसे ही नया चालान आएगा, मोबाइल पर घंटी + अलर्ट बजेगा
+        try {
+          const currentChalanNos = myTrips.map(t => String(t.chalan_no || '')).filter(Boolean);
+          let prevChallans = JSON.parse(localStorage.getItem('known_truck_challans') || '[]');
+
+          // नए चालानों की पहचान
+          const freshChallans = myTrips.filter(t => t.chalan_no && !prevChallans.includes(String(t.chalan_no)));
+
+          if (freshChallans.length > 0 && prevChallans.length > 0) {
+            freshChallans.forEach(ch => {
+              const cNo = ch.chalan_no;
+              const bName = ch.branch || 'स्टेशन';
+
+              // 1. फ़ोन वाइब्रेट + मधुर घंटी
+              if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+              try {
+                const actx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = actx.createOscillator();
+                const gain = actx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(587.33, actx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(880, actx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.3, actx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, actx.currentTime + 0.3);
+                osc.connect(gain); gain.connect(actx.destination);
+                osc.start(); osc.stop(actx.currentTime + 0.35);
+              } catch(e) {}
+
+              // 2. मोबाइल स्टेटस बार में नेटिव नोटिफिकेशन
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('🔔 नया चालान प्राप्त हुआ!', {
+                  body: `चालान सं.: #${cNo} · गंतव्य: ${bName}`,
+                  icon: '../icons/icon-192.png',
+                  vibrate: [200, 100, 200]
+                });
+              }
+
+              // 3. इन-ऐप स्क्रीन टोस्ट
+              if (window.showToast) window.showToast(`🔔 नया चालान: #${cNo} (${bName})`, 'success');
+            });
+          }
+
+          // वर्तमान चालानों को सेव करना
+          localStorage.setItem('known_truck_challans', JSON.stringify(currentChalanNos));
+
+          // पहली बार परमिशन मांगना
+          if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+          }
+        } catch(notifErr) {}
+      }
       container.innerHTML = myTrips.map((trip, idx) => {
         let json = typeof trip.json_data === 'string' ? JSON.parse(trip.json_data || '{}') : (trip.json_data || {});
         let cNo = trip.chalan_no || (json.header && json.header.chalan_no) || 'N/A';

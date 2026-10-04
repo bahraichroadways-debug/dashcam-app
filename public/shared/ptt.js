@@ -1,185 +1,193 @@
-// =========================================================================
+// ==========================================
 // FILE: public/shared/ptt.js
-// ULTRA-FAST LIGHTWEIGHT FIRESTORE WALKIE-TALKIE (PROVEN & 100% RELIABLE)
-// =========================================================================
+// 100% PRIVACY-SAFE ON-DEMAND PTT WALKIE-TALKIE ENGINE
+// ==========================================
 
 (function() {
-  let mediaRecorder = null;
   let audioChunks = [];
-  let activeRoom = null;
-  let callUnsub = null;
-  let lastPlayedTimestamp = Date.now();
   let micStream = null;
+  let mediaRecorder = null;
+  let activeRoom = 'fleet_broadcast';
+  let callUnsub = null;
+  let audioCtx = null;
+  let isReceiving = false;
 
   const isPageAdmin = window.location.pathname.includes('admin') || document.title.includes('Admin');
-  const myRole = isPageAdmin ? 'admin' : 'driver';
 
-  function diagLog(step, message, type = 'info') {
-    const colors = {
-      info: 'color: #3b82f6; font-weight: bold;',
-      success: 'color: #10b981; font-weight: bold;',
-      warn: 'color: #f59e0b; font-weight: bold;',
-      error: 'color: #ef4444; font-weight: bold;'
-    };
-    console.log(`%c[PTT ${myRole.toUpperCase()}] ${step}: ${message}`, colors[type] || colors.info);
+  function diagLog(step, message) {
+    console.log(`[PTT ${isPageAdmin ? 'ADMIN' : 'DRIVER'}] ${step}: ${message}`);
   }
 
-  // 🔊 1. इंस्टेंट वॉक-टॉकी बीप (मात्र 25ms)
-  function playFastBeep(ctx) {
+  // 🔔 वॉक-टॉकी बीप साउंड (शुरू और खत्म होने पर)
+  function playWalkieBeep() {
     try {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) audioCtx = new AudioContextClass();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+      if (!audioCtx) return;
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
       osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = 1300;
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.035);
+      gain.connect(audioCtx.destination);
       osc.start();
-      osc.stop(ctx.currentTime + 0.035);
+      osc.stop(audioCtx.currentTime + 0.1);
     } catch(e) {}
   }
 
-  // 🔊 2. आवाज़ को सीधे हार्डवेयर मिक्सर पर सुपरफास्ट बजाना
+  // 🔊 प्राप्त ऑडियो सीधे स्पीकर पर बजाना (इसके लिए माइक की 0% ज़रूरत है)
   async function playVoiceDirect(base64Data) {
+    if (isReceiving || !base64Data) return;
+    isReceiving = true;
+
     try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      if (ctx.state === 'suspended') await ctx.resume();
-
-      playFastBeep(ctx);
-
-      const res = await fetch(base64Data);
-      const arrayBuffer = await res.arrayBuffer();
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-
-      const source = ctx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(ctx.destination);
-      source.start(0);
-      diagLog("स्पीकर", "🔊 पूरी आवाज़ लाउडस्पीकर पर बज रही है!", "success");
+      playWalkieBeep();
+      const audio = new Audio(base64Data);
+      audio.volume = 1.0;
+      await audio.play();
+      audio.onended = () => { isReceiving = false; };
     } catch(err) {
-      diagLog("एरर", "प्लेबैक समस्या: " + err.message, "error");
+      isReceiving = false;
     }
   }
 
-  // 🎙️ 3. माइक को हमेशा वॉर्म-अप रखना (0ms लेटेंसी)
-  async function ensureMic() {
-    if (micStream && micStream.active) return micStream;
+  // 🎙️ ऑन-डिमांड माइक: केवल बटन दबाने पर 1 बार चालू होगा
+  async function acquireMic() {
     try {
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-      });
-      return micStream;
-    } catch(e) {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        return await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+      }
+      return null;
+    } catch (e) {
+      diagLog('MIC', 'माइक की अनुमति नहीं मिली: ' + e.message);
       return null;
     }
   }
 
-  // 📡 4. लिसनर
+  // 🛑 माइक को हार्डवेयर से पूरी तरह बंद करना (फोन कॉल व व्हाट्सएप आज़ाद)
+  function releaseMic() {
+    if (micStream) {
+      micStream.getTracks().forEach(track => {
+        try { track.stop(); } catch(e) {}
+      });
+      micStream = null;
+    }
+  }
+
+  // 📡 वॉक-टॉकी रूम शुरू करना
   function initPTT({ isInitiator, roomId }) {
-    activeRoom = roomId || 'fleet_broadcast';
-    diagLog("आरंभ", `वॉक-टॉकी एक्टिव: कमरा = [${activeRoom}]`, "info");
-    ensureMic();
+    if (roomId) activeRoom = roomId;
+    diagLog('आरंभ', `वॉक-टॉकी एक्टिव: कमरा = [${activeRoom}]`);
 
     const db = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : null;
-    if (!db || !activeRoom) return;
+    if (!db) return;
 
     if (callUnsub) { callUnsub(); callUnsub = null; }
 
+    // आने वाली आवाज़ सुनने वाला लिसनर (0% माइक उपयोग)
     callUnsub = db.collection('calls').doc(activeRoom).onSnapshot((doc) => {
       if (!doc.exists) return;
       const data = doc.data();
-      if (!data || !data.audioBase64) return;
 
-      // अगर यह आवाज़ सामने वाले ने भेजी है और ताज़ा है
-      if (data.sender !== myRole && data.timestamp > lastPlayedTimestamp) {
-        lastPlayedTimestamp = data.timestamp;
-        diagLog("रिसीव", `🎙️ ${data.sender.toUpperCase()} का संदेश मिला! बजा रहे हैं...`, "success");
+      // अगर संदेश दूसरे व्यक्ति (Sender) ने भेजा है और ताज़ा है (10s से कम पुराना)
+      const isFresh = (Date.now() - (data.ts || 0)) < 10000;
+      const myRole = isPageAdmin ? 'ADMIN' : 'DRIVER';
+
+      if (data && data.audioBase64 && data.sender !== myRole && isFresh) {
         playVoiceDirect(data.audioBase64);
-        if (window.showToast) window.showToast(`📢 ${data.sender.toUpperCase()} का संदेश...`, "info");
       }
     });
   }
 
-// 🎙️ माइक सिर्फ PTT दबाने पर चालू होगा (0% बैटरी ड्रेन)
+  // 🎙️ बोलने के लिए बटन दबाना (Start Talking)
   async function startTalking() {
-    try {
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-      });
-    } catch(e) {
-      alert("माइक अनुमति चाहिए!");
-      return;
-    }
+    audioChunks = [];
+    micStream = await acquireMic();
+    if (!micStream) return;
 
     try {
-      audioChunks = [];
+      playWalkieBeep();
+
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : '';
-      const options = { audioBitsPerSecond: 12000 };
+      const options = { audioBitsPerSecond: 16000 };
       if (mimeType) options.mimeType = mimeType;
 
       mediaRecorder = new MediaRecorder(micStream, options);
       mediaRecorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) audioChunks.push(e.data);
       };
-
       mediaRecorder.start();
-      if (navigator.vibrate) navigator.vibrate(30);
-      diagLog("माइक", "🔴 बोलना शुरू करें...", "warn");
     } catch(err) {
-      console.warn("रिकॉर्डर एरर:", err);
+      releaseMic();
     }
   }
 
-  // 🚀 PTT छोड़ते ही माइक हार्डवेयर 100% बंद (दूसरे ऐप्स के लिए फ्री + ग्रीन डॉट OFF)
+  // 🛑 बोलना बंद करना (Stop Talking — उंगली हटाते ही माइक 100% फ्री)
   function stopTalking() {
-    if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+        
+        if (audioBlob.size > 200) {
+          const reader = new FileReader();
+          reader.onloadend = async () => {
+            const base64Audio = reader.result;
+            const db = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : null;
+            if (db && activeRoom) {
+              await db.collection('calls').doc(activeRoom).set({
+                audioBase64: base64Audio,
+                sender: isPageAdmin ? 'ADMIN' : 'DRIVER',
+                ts: Date.now()
+              }, { merge: true }).catch(() => {});
+            }
+          };
+          reader.readAsDataURL(audioBlob);
+        }
 
-    mediaRecorder.onstop = async () => {
-      // 🛑 माइक हार्डवेयर को उसी पल मार दें (Stop Tracks)
-      if (micStream) {
-        micStream.getTracks().forEach(t => t.stop());
-        micStream = null;
-      }
-
-      const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-      if (audioBlob.size < 200) return;
-
-      const reader = new FileReader();
-      reader.readAsDataURL(audioBlob);
-      reader.onloadend = async () => {
-        const base64Audio = reader.result;
-        const db = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : null;
-        if (!db || !activeRoom) return;
-
-        lastPlayedTimestamp = Date.now();
-        await db.collection('calls').doc(activeRoom).set({
-          audioBase64: base64Audio,
-          sender: myRole,
-          timestamp: Date.now()
-        }, { merge: true }).catch(() => {});
-
-        diagLog("सफल", "✅ प्रेषित!", "success");
-        if (navigator.vibrate) navigator.vibrate(15);
+        // 🎯 तुरंत माइक का हार्डवेयर बंद करें
+        releaseMic();
       };
-    };
 
-    mediaRecorder.stop();
+      mediaRecorder.stop();
+    } else {
+      releaseMic();
+    }
   }
 
-
+  // 🔀 रूम बदलना (ऑल फ्लीट ➔ सिंगल ट्रक)
   function switchRoom(newRoomId) {
+    if (!newRoomId || newRoomId === activeRoom) return;
     activeRoom = newRoomId;
-    lastPlayedTimestamp = Date.now();
-    initPTT({ isInitiator: isPageAdmin, roomId: newRoomId });
+    initPTT({ isInitiator: isPageAdmin, roomId: activeRoom });
   }
+
+  // 🛡️ स्क्रीन बंद / बैकग्राउंड में जाते ही माइक तुरंत बंद
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      releaseMic();
+    }
+  });
 
   window.PTTEngine = {
     initPTT,
     startTalking,
     stopTalking,
     switchRoom,
-    updateStream: () => {}
+    releaseMic
   };
 })();

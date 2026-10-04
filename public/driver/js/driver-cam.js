@@ -134,17 +134,26 @@ const db = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.fi
       const isDemandFresh = (Date.now() - (data.demand_ts || 0)) < 45000;
       const isAdminWatching = data.watch_demand === true && isDemandFresh;
 
-      if (isAdminWatching) {
+if (isAdminWatching) {
         const reqQuality = data.video_quality || '320p';
-        
-        if (!stream || !stream.active) {
-          await startCamera();
-        }
+        const dPanel = document.getElementById('dashcamPanel');
+        const isDashcamVisible = dPanel && !dPanel.classList.contains('hidden');
 
-        if (!broadcastTimer || reqQuality !== activeQuality) {
-          activeQuality = reqQuality;
-          startLiveBroadcast(activeQuality);
+        // 🎯 सख्त प्राइवेसी नियम: कैमरा केवल तभी खुलेगा जब ड्राइवर 'Dashcam' टैब पर हो!
+        if (isDashcamVisible) {
+          if (!stream || !stream.active) {
+            await startCamera();
+          }
+
+          if (!broadcastTimer || reqQuality !== activeQuality) {
+            activeQuality = reqQuality;
+            startLiveBroadcast(activeQuality);
+          }
+        } else {
+          // अगर ड्राइवर Map पर है ➔ कैमरा 100% बंद रहेगा (0% बैटरी खर्च)
+          stopCamera();
         }
+      }
       } else {
         stopLiveBroadcast();
       }

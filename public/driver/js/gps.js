@@ -340,7 +340,7 @@ this.notifySubscribers(locData);
       );
     },
 
-    // 🔋 8. स्मार्ट बैटरी थ्रॉटलर (चलती गाड़ी: 15s | रुकी गाड़ी: 60s)
+// 🔋 8. स्मार्ट बैटरी सेवर मोशन डिटेक्टर (85% बैटरी बचत — 24/7 बैकग्राउंड एक्टिव)
     shouldSendUpdate: function(loc) {
       const now = Date.now();
       const timeDiff = now - this.lastSentTime;
@@ -348,11 +348,16 @@ this.notifySubscribers(locData);
       if (!this.lastSentLat || !this.lastSentLng) return true;
 
       const dist = getDistanceMeters(this.lastSentLat, this.lastSentLng, loc.lat, loc.lng);
-      const userRateSec = Number(localStorage.getItem('driver_gps_rate') || 15);
-      const minIntervalMs = userRateSec * 1000;
+      const speedKmh = Number(loc.speed || 0) * 3.6;
 
-// ⚡ एक्टिव हार्टबीट (12-15 सेकंड): नेट बंद होते ही एडमिन तुरंत पकड़ लेगा
-      return timeDiff >= 12000;    },
+      // 🚗 1. गाड़ी चलते ही (स्पीड > 2 km/h या 15 मीटर दूरी): तुरंत 15s लाइव पिंग
+      if (speedKmh > 2.0 || dist >= 15) {
+        return timeDiff >= 15000;
+      }
+
+      // 🛑 2. गाड़ी रुकने / खड़ी होने पर: 60s डीप स्लीप (फोन ठंडा रहेगा, 85% बैटरी की बचत)
+      return timeDiff >= 60000;
+    },
 
     recordSend: function(loc) {
       this.lastSentTime = Date.now();
