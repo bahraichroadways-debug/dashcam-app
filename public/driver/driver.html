@@ -456,6 +456,11 @@
     const truck = (localStorage.getItem('driver_vehicle_num') || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!truck) return;
 
+// 🔔 ऐप खुलते ही Android 13/14 नोटिफिकेशन अनुमति मांगेगा
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+
     try {
       const cam = await window.DriverCam.initDriverCam(document.getElementById('localVideo'), truck);
       window.driverCam = cam;

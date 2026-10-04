@@ -11,7 +11,7 @@ async function initDriverCam(videoEl, truckId) {
   let broadcastTimer = null;
   let demandUnsub = null;
 
-// 📐 4-लेवल डायनामिक DVR प्रोफाइल्स (हर रिज़ॉल्यूशन पर अलग स्पीड व क्वालिटी)
+  // 📐 4-लेवल डायनामिक DVR प्रोफाइल्स (हर रिज़ॉल्यूशन पर अलग स्पीड व क्वालिटी)
   const PROFILES = {
     '240p': { maxDim: 260, quality: 0.18, delayMs: 40 },  // 🚀 सुपर फ़ास्ट मोशन (8-10 FPS — मात्र 4 KB)
     '320p': { maxDim: 380, quality: 0.28, delayMs: 80 },  // ⚡ फ़ास्ट हाईवे (6-7 FPS)
@@ -93,7 +93,7 @@ async function initDriverCam(videoEl, truckId) {
         ctx.drawImage(videoEl, 0, 0, targetW, targetH);
         const frameData = canvas.toDataURL('image/jpeg', prof.quality);
 
-const db = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : null;
+        const db = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : null;
         if (db) {
           await db.collection('calls').doc(`truck_${truckId}`).set({
             live_frame: frameData,
@@ -118,8 +118,7 @@ const db = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.fi
     }
   }
 
-
-  // 👂 एडमिन ऑन-डिमांड लिसनर
+  // 👂 एडमिन ऑन-डिमांड लिसनर (बिल्कुल सही ब्रैकेट के साथ)
   function startDemandListener() {
     if (demandUnsub || !truckId) return;
     const db = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : null;
@@ -134,12 +133,12 @@ const db = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.fi
       const isDemandFresh = (Date.now() - (data.demand_ts || 0)) < 45000;
       const isAdminWatching = data.watch_demand === true && isDemandFresh;
 
-if (isAdminWatching) {
+      if (isAdminWatching) {
         const reqQuality = data.video_quality || '320p';
         const dPanel = document.getElementById('dashcamPanel');
         const isDashcamVisible = dPanel && !dPanel.classList.contains('hidden');
 
-        // 🎯 सख्त प्राइवेसी नियम: कैमरा केवल तभी खुलेगा जब ड्राइवर 'Dashcam' टैब पर हो!
+        // 🎯 सख्त प्राइवेसी नियम: कैमरा केवल तब खुलेगा जब ड्राइवर 'Dashcam' टैब पर हो!
         if (isDashcamVisible) {
           if (!stream || !stream.active) {
             await startCamera();
@@ -150,10 +149,8 @@ if (isAdminWatching) {
             startLiveBroadcast(activeQuality);
           }
         } else {
-          // अगर ड्राइवर Map पर है ➔ कैमरा 100% बंद रहेगा (0% बैटरी खर्च)
           stopCamera();
         }
-      }
       } else {
         stopLiveBroadcast();
       }
