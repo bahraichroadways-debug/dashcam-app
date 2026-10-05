@@ -33,6 +33,14 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- 🚛 24/7 बैकग्राउंड फ्लीट जीपीएस सर्विस -->
+        <service
+            android:name=".BackgroundFleetService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
     </application>
 
     <!-- 🚛 Permissions (कैमरा, 24/7 जीपीएस, PTT माइक व नोटिफिकेशन) -->

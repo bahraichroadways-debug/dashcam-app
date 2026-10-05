@@ -1,6 +1,6 @@
 // ==========================================
 // FILE: public/admin/js/live-map.js
-// 24/7 ALL-FLEET MAP ENGINE (LIVE PULSE + PARKED 🅿️ PINS + AUTO-FIT)
+// 24/7 ALL-FLEET MAP ENGINE (ON-DEMAND TRACKING SIGNAL + LIVE PINS)
 // ==========================================
 
 function createLiveMap(containerEl) {
@@ -8,7 +8,6 @@ function createLiveMap(containerEl) {
 
   const map = L.map(containerEl, { zoomControl: true }).setView([27.2, 81.5], 8);
 
-  // Esri HD सैटेलाइट व स्ट्रीट मैप
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '© OpenStreetMap'
@@ -16,24 +15,42 @@ function createLiveMap(containerEl) {
 
   let markers = {};
   let hasFittedInitially = false;
+  let demandTimer = null;
+  let activeTruckIds = [];
+
+  // 📡 एडमिन मैप पर मौजूद सभी गाड़ियों को ऑन-डिमांड वेकअप पिंग भेजता है
+  function sendMapTrackingDemand(isActive) {
+    const db = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : null;
+    if (!db || activeTruckIds.length === 0) return;
+
+    activeTruckIds.forEach(id => {
+      db.collection('truck_locations').doc(id).set({
+        track_demand: isActive,
+        demand_ts: Date.now()
+      }, { merge: true }).catch(() => {});
+    });
+  }
+
+  // मैप खुला रहने तक हर 20 सेकंड में पल्स
+  demandTimer = setInterval(() => sendMapTrackingDemand(true), 20000);
 
   function update(trucks) {
     if (!Array.isArray(trucks)) return;
 
     const currentIds = new Set();
     const boundsPoints = [];
+    activeTruckIds = trucks.map(t => t.id);
 
     trucks.forEach((truck) => {
       currentIds.add(truck.id);
       const pos = [truck.lat, truck.lng];
       boundsPoints.push(pos);
 
-      // 🎨 पिन का रूप: लाइव के लिए ग्लोइंग नीला/हरा, पार्क्ड के लिए ग्रे स्टील
       let iconHtml = '';
       if (truck.isLive) {
         iconHtml = `
           <div style="position:relative; width:30px; height:30px;">
-            <div style="position:absolute; inset:0; border-radius:50%; background:#22c55e; opacity:0.4; animation:ping 1.5s cubic-bezier(0,0,0.2,1) infinite;"></div>
+            <div style="position:absolute; inset:0; border-radius:50%; background:#22c55e; opacity:0.4; animation:pulse 1.8s infinite;"></div>
             <div style="position:absolute; inset:3px; border-radius:50%; background:#16a34a; border:2px solid #fff; box-shadow:0 0 12px rgba(34,197,94,0.9); display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; font-weight:900;">🚚</div>
           </div>`;
       } else {
@@ -74,7 +91,6 @@ function createLiveMap(containerEl) {
       }
     });
 
-    // जो गाड़ियाँ हट गई हैं उनके मार्कर हटाएं
     Object.keys(markers).forEach((id) => {
       if (!currentIds.has(id)) {
         map.removeLayer(markers[id]);
@@ -82,7 +98,6 @@ function createLiveMap(containerEl) {
       }
     });
 
-    // ⚡ पहली बार लोड होने पर पूरे फ्लीट को स्क्रीन में फ़िट करें
     if (!hasFittedInitially && boundsPoints.length > 0) {
       map.fitBounds(L.latLngBounds(boundsPoints), { padding: [40, 40], maxZoom: 14 });
       hasFittedInitially = true;
@@ -90,6 +105,10 @@ function createLiveMap(containerEl) {
   }
 
   function destroy() {
+    if (demandTimer) { clearInterval(demandTimer); demandTimer = null; }
+    // 🛑 एडमिन के मैप से हटते ही ड्राइवर के फोन को वापस सुला देना (0% बैटरी खर्च)
+    sendMapTrackingDemand(false);
+
     Object.values(markers).forEach(m => map.removeLayer(m));
     markers = {};
     map.remove();

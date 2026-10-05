@@ -340,22 +340,27 @@ this.notifySubscribers(locData);
       );
     },
 
-// 🔋 8. स्मार्ट बैटरी सेवर मोशन डिटेक्टर (85% बैटरी बचत — 24/7 बैकग्राउंड एक्टिव)
+// 🔋 8. ऑन-डिमांड सुपर बैटरी सेवर (एडमिन के देखने पर 5s लाइव, बाकी समय 60s-90s डीप स्लीप)
     shouldSendUpdate: function(loc) {
       const now = Date.now();
       const timeDiff = now - this.lastSentTime;
 
       if (!this.lastSentLat || !this.lastSentLng) return true;
 
-      const dist = getDistanceMeters(this.lastSentLat, this.lastSentLng, loc.lat, loc.lng);
       const speedKmh = Number(loc.speed || 0) * 3.6;
+      const isAdminTracking = window.isDemandTrackingActive === true;
 
-      // 🚗 1. गाड़ी चलते ही (स्पीड > 2 km/h या 15 मीटर दूरी): तुरंत 15s लाइव पिंग
-      if (speedKmh > 2.0 || dist >= 15) {
+      // ⚡ 1. अगर एडमिन मैप पर देख रहा है: तुरंत 5 सेकंड में रियल-टाइम पिंग!
+      if (isAdminTracking) {
+        return timeDiff >= 5000;
+      }
+
+      // 🚗 2. सामान्य ड्राइविंग (गाड़ी चल रही है): 15 सेकंड का पिंग
+      if (speedKmh > 2.0) {
         return timeDiff >= 15000;
       }
 
-      // 🛑 2. गाड़ी रुकने / खड़ी होने पर: 60s डीप स्लीप (फोन ठंडा रहेगा, 85% बैटरी की बचत)
+      // 🛑 3. गाड़ी खड़ी होने पर (डीप स्लीप): 60 सेकंड में 1 हल्का पिंग (95% बैटरी बचत!)
       return timeDiff >= 60000;
     },
 
@@ -444,3 +449,13 @@ this.notifySubscribers(locData);
     initTransportMap();
   });
 })();
+// 👂 एडमिन मैप ऑन-डिमांड लिसनर (डिमांड आते ही 5s लाइव मोड ऑन)
+    const truckNo = localStorage.getItem('driver_vehicle_num') || localStorage.getItem('driver_id');
+    if (truckNo && typeof firebase !== 'undefined' && firebase.firestore) {
+      firebase.firestore().collection('truck_locations').doc(truckNo.toUpperCase().replace(/[^A-Z0-9]/g, '')).onSnapshot(doc => {
+        if (!doc.exists) return;
+        const d = doc.data() || {};
+        const isFresh = (Date.now() - (d.demand_ts || 0)) < 45000;
+        window.isDemandTrackingActive = (d.track_demand === true && isFresh);
+      });
+    }
