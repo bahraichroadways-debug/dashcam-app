@@ -449,3 +449,21 @@ html, body {
 }
 .shutdown-overlay.active { opacity: 1; pointer-events: auto; }
 .shutdown-text { color: #475569; font-size: 14px; letter-spacing: .5px; }
+/* 🏢 ब्रांच व्यूअर मोड: ब्रांच को सिर्फ क्लीन फुलस्क्रीन मैप व स्टेशन दिखेंगे (सारे ड्राइवर बटन गायब) */
+html.is-viewer-mode #navBtn,
+html.is-viewer-mode #settingsIconBtn,
+html.is-viewer-mode #driverTabBar,
+html.is-viewer-mode #persistentActionControls,
+html.is-viewer-mode #dragHandle,
+html.is-viewer-mode .trip-compact-wrap {
+  display: none !important;
+}
+
+html.is-viewer-mode #mapSection {
+  height: 100% !important;
+  flex: 1 !important;
+}
+
+html.is-viewer-mode .top-bar {
+  justify-content: center;
+}

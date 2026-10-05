@@ -220,18 +220,28 @@
       driverMarker.setIcon(icon);
     }
 
-    if (localStorage.getItem('driver_auto_center') !== 'false') {
+// 🎯 अगर ड्राइवर या ब्रांच खुद मैप ज़ूम/ड्रैग कर रही है, तो जबरदस्ती खींचना बंद!
+    if (!mapInstance._userDragBound) {
+      mapInstance._userDragBound = true;
+      mapInstance.on('dragstart zoomstart', () => { isUserExploringMap = true; });
+    }
+
+    if (!isUserExploringMap && localStorage.getItem('driver_auto_center') !== 'false') {
       mapInstance.panTo([lat, lng], { animate: true, duration: 0.8 });
     }
   }
 
-  // 🎯 7. री-सेंटर व WhatsApp शेयर
+// 🎯 7. री-सेंटर व WhatsApp शेयर (फ्री एक्सप्लोर सपोर्ट)
+  let isUserExploringMap = false;
+
   window.recenterDriverGPS = function() {
+    isUserExploringMap = false; // 🎯 ड्राइवर ने खुद फोकस लॉक दबाया
     if (!mapInstance || !driverMarker) return;
     const pos = driverMarker.getLatLng();
     mapInstance.flyTo(pos, 16, { animate: true, duration: 0.8 });
     if (window.showToast) window.showToast("🎯 गाड़ी पर फोकस लॉक!", "info");
   };
+
 
   window.shareLiveLocationWhatsApp = function() {
     const truckNo = localStorage.getItem('driver_vehicle_num') || '';

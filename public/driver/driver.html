@@ -5,12 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Driver Cockpit — Bahraich Roadways</title>
 
-<!-- 🛡️ 1. दर्शक मोड सबसे पहले लॉक करें -->
+<!-- 🛡️ 1. दर्शक मोड सबसे पहले लॉक करें (ब्रांच क्लीन व्यू) -->
 <script>
   (function() {
     const p = new URLSearchParams(window.location.search);
     if (p.get('role') === 'viewer') {
       window.isViewerMode = true;
+      document.documentElement.classList.add('is-viewer-mode'); // 🎯 ब्रांच के लिए स्पेशल क्लास
     }
   })();
 </script>
