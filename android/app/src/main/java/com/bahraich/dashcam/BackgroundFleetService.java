@@ -1,6 +1,6 @@
 package com.bahraich.dashcam;
 
-import android.annotation.SuppressLint;
+import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -8,6 +8,8 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.content.pm.ServiceInfo;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -16,6 +18,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.PowerManager;
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -41,34 +44,48 @@ public class BackgroundFleetService extends Service implements LocationListener 
                 .setOngoing(true)
                 .build();
 
-        startForeground(101, notification);
-
-        // 🔋 हल्का वेकलॉक (0% बैटरी ड्रेन)
-        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-        if (pm != null) {
-            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Dashcam::FleetWakeLock");
-            wakeLock.acquire();
+        // 🛡️ Android 14 क्रैश-प्रूफ फ़ोरग्राउंड स्टार्ट
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(101, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
+            } else {
+                startForeground(101, notification);
+            }
+        } catch (Exception e) {
+            try { startForeground(101, notification); } catch (Exception ignored) {}
         }
+
+        // 🔋 सुरक्षित वेकलॉक
+        try {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Dashcam::FleetWakeLock");
+                wakeLock.acquire(10*60*1000L /* 10 मिनट सेफ़टी */);
+            }
+        } catch (Exception ignored) {}
 
         startNativeLocationTracking();
     }
 
-    @SuppressLint("MissingPermission")
     private void startNativeLocationTracking() {
+        // 🎯 क्रैश से सुरक्षा: सिर्फ तभी चालू करो जब ड्राइवर ने परमिशन Allow कर दी हो
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         if (locationManager == null) return;
 
         try {
-            // 🎯 स्मार्ट बैटरी सेवर: 20 सेकंड या 15 मीटर चलने पर ही जीपीएस जगेगा!
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 20000, 15, this);
             }
             if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
                 locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 20000, 15, this);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        } catch (SecurityException se) {
+            // Android 14 सुरक्षा एरर को चुपचाप पकड़ना (ताकि ऐप कभी क्रैश न हो)
+        } catch (Exception ignored) {}
     }
 
     @Override
@@ -77,22 +94,19 @@ public class BackgroundFleetService extends Service implements LocationListener 
         sendLocationDirectToFirestore(loc);
     }
 
-    // 📡 सीधे Android Native से Firestore में लाइव लोकेशन भेजना (0% WebView Dependency)
     private void sendLocationDirectToFirestore(final Location loc) {
         new Thread(() -> {
             try {
-                // गाड़ी का नंबर प्राप्त करना
                 SharedPreferences prefs = getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE);
                 String truck = prefs.getString("driver_vehicle_num", "");
                 if (truck == null || truck.trim().isEmpty()) {
-                    truck = "UP74T4826"; // फ़ॉलबैक
+                    truck = "UP74T4826";
                 }
                 truck = truck.replaceAll("[^a-zA-Z0-9]", "").toUpperCase();
 
                 SimpleDateFormat sdf = new SimpleDateFormat("hh:mm a", Locale.getDefault());
                 String istTime = sdf.format(new Date());
 
-                // Firestore REST API एंडपॉइंट
                 String urlStr = "https://firestore.googleapis.com/v1/projects/dashcamfordrive/databases/(default)/documents/truck_locations/" + truck + "?updateMask.fieldPaths=lat&updateMask.fieldPaths=lng&updateMask.fieldPaths=speed&updateMask.fieldPaths=timestamp&updateMask.fieldPaths=last_seen&updateMask.fieldPaths=device_info&updateMask.fieldPaths=status";
 
                 URL url = new URL(urlStr);
@@ -100,8 +114,8 @@ public class BackgroundFleetService extends Service implements LocationListener 
                 conn.setRequestMethod("PATCH");
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setDoOutput(true);
-                conn.setConnectTimeout(8000);
-                conn.setReadTimeout(8000);
+                conn.setConnectTimeout(6000);
+                conn.setReadTimeout(6000);
 
                 long now = System.currentTimeMillis();
                 String jsonBody = "{"
@@ -120,27 +134,24 @@ public class BackgroundFleetService extends Service implements LocationListener 
                 os.write(jsonBody.getBytes("UTF-8"));
                 os.close();
 
-                int code = conn.getResponseCode();
+                conn.getResponseCode();
                 conn.disconnect();
-            } catch (Exception e) {
-                // साइलेंट
-            }
+            } catch (Exception ignored) {}
         }).start();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        startNativeLocationTracking(); // परमिशन मिलने के बाद दोबारा प्रयास
         return START_STICKY;
     }
 
     @Override
     public void onDestroy() {
-        if (locationManager != null) {
-            locationManager.removeUpdates(this);
-        }
-        if (wakeLock != null && wakeLock.isHeld()) {
-            wakeLock.release();
-        }
+        try {
+            if (locationManager != null) locationManager.removeUpdates(this);
+            if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+        } catch (Exception ignored) {}
         super.onDestroy();
     }
 
